@@ -9,11 +9,14 @@ var jsonParser = bodyParser.json();
 // Add your API endpoints here
 
 var runServer = function(callback) {
-    var databaseUri = global.databaseUri || 'mongodb://localhost/sup';
+    var databaseUri = process.env.DATABASE_URI || global.databaseUri || 'mongodb://localhost/sup';
     mongoose.connect(databaseUri).then(function() {
-        var server = app.listen(8080, function() {
-            console.log('Listening on localhost:8080');
-            callback(server);
+        var port = process.env.PORT || 8080;
+        var server = app.listen(port, function() {
+            console.log('Listening on localhost:' + port);
+            if (callback) {
+                callback(server);
+            }
         });
     });
 };

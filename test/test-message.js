@@ -6,7 +6,6 @@ var spies = require('chai-spies');
 var mongoose = require('mongoose');
 var UrlPattern = require('url-pattern');
 var app = require('../index').app;
-var runServer = require('../index').runServer;
 
 var should = chai.should();
 
@@ -15,46 +14,37 @@ chai.use(spies);
 
 describe('Message endpoints', function() {
     var server;
-    before(function(done) {
-        runServer(function(_server) {
-            server = _server;
-            done()
-        });
-    });
+    beforeEach(function(done) {
+        mongoose.connection.db.dropDatabase(function(err, res) {
+            this.alice = {
+                username: 'alice',
+                _id: 'AAAAAAAAAAAAAAAAAAAAAAAA'
+            };
 
-    beforeEach(function() {
-        mongoose.connection.db.dropDatabase();
-        this.alice = {
-            username: 'alice',
-            _id: 'AAAAAAAAAAAAAAAAAAAAAAAA'
-        };
+            this.bob = {
+                username: 'bob',
+                _id: 'BBBBBBBBBBBBBBBBBBBBBBBB'
+            };
 
-        this.bob = {
-            username: 'bob',
-            _id: 'BBBBBBBBBBBBBBBBBBBBBBBB'
-        };
+            this.chuck = {
+                username: 'chuck',
+                _id: 'CCCCCCCCCCCCCCCCCCCCCCCC'
+            };
 
-        this.chuck = {
-            username: 'chuck',
-            _id: 'CCCCCCCCCCCCCCCCCCCCCCCC'
-        };
-
-        // Create users
-        var promiseA = chai.request(app)
-                .put('/users/' + this.alice._id)
-                .send(this.alice);
-        var promiseB = chai.request(app)
-                .put('/users/' + this.bob._id)
-                .send(this.bob);
-        var promiseC = chai.request(app)
-                .put('/users/' + this.chuck._id)
-                .send(this.chuck);
-        return Promise.all([promiseA, promiseB, promiseC]);
-    });
-
-    after(function() {
-        mongoose.connection.close();
-        server.close();
+            // Create users
+            var promiseA = chai.request(app)
+                    .put('/users/' + this.alice._id)
+                    .send(this.alice);
+            var promiseB = chai.request(app)
+                    .put('/users/' + this.bob._id)
+                    .send(this.bob);
+            var promiseC = chai.request(app)
+                    .put('/users/' + this.chuck._id)
+                    .send(this.chuck);
+            Promise.all([promiseA, promiseB, promiseC]).then(function() {
+                done();
+            });
+        }.bind(this));
     });
 
     describe('/messages', function() {
