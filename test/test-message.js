@@ -2,45 +2,46 @@ global.databaseUri = 'mongodb://localhost/sup-dev';
 
 var chai = require('chai');
 var chaiHttp = require('chai-http');
-var spies = require('chai-spies');
 var mongoose = require('mongoose');
 var UrlPattern = require('url-pattern');
 var app = require('../index').app;
 
+var User = require('../models/user');
+var Message = require('../models/message');
+
+var makeSpy = require('./spy');
+
 var should = chai.should();
 
 chai.use(chaiHttp);
-chai.use(spies);
 
 describe('Message endpoints', function() {
     var server;
     beforeEach(function(done) {
+        this.listPattern = new UrlPattern('/messages');
+        this.singlePattern = new UrlPattern('/messages/:messageId');
+        // Clear the database
         mongoose.connection.db.dropDatabase(function(err, res) {
+            // Add three example users
             this.alice = {
                 username: 'alice',
-                _id: 'AAAAAAAAAAAAAAAAAAAAAAAA'
+                _id: 'aaaaaaaaaaaaaaaaaaaaaaaa'
             };
 
             this.bob = {
                 username: 'bob',
-                _id: 'BBBBBBBBBBBBBBBBBBBBBBBB'
+                _id: 'bbbbbbbbbbbbbbbbbbbbbbbb'
             };
 
             this.chuck = {
                 username: 'chuck',
-                _id: 'CCCCCCCCCCCCCCCCCCCCCCCC'
+                _id: 'cccccccccccccccccccccccc'
             };
 
             // Create users
-            var promiseA = chai.request(app)
-                    .put('/users/' + this.alice._id)
-                    .send(this.alice);
-            var promiseB = chai.request(app)
-                    .put('/users/' + this.bob._id)
-                    .send(this.bob);
-            var promiseC = chai.request(app)
-                    .put('/users/' + this.chuck._id)
-                    .send(this.chuck);
+            var promiseA = new User(this.alice).save();
+            var promiseB = new User(this.bob).save();
+            var promiseC = new User(this.chuck).save();
             Promise.all([promiseA, promiseB, promiseC]).then(function() {
                 done();
             });
@@ -48,15 +49,13 @@ describe('Message endpoints', function() {
     });
 
     describe('/messages', function() {
-        beforeEach(function() {
-            this.pattern = new UrlPattern('/messages');
-        });
-
         describe('GET', function() {
             it('should return an empty list of messages initially', function() {
+                // Get the list of messages
                 return chai.request(app)
-                    .get(this.pattern.stringify())
+                    .get(this.listPattern.stringify())
                     .then(function(res) {
+                        // Check that it's an empty array
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -82,26 +81,24 @@ describe('Message endpoints', function() {
                     text: 'Hi Chuck'
                 };
 
-                var promiseA = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageA);
-                var promiseB = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageB);
-                var promiseC = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageC);
+                // Create three messages
+                var messageA = new Message(messageA);
+                var messageB = new Message(messageB);
+                var messageC = new Message(messageC);
 
-                return promiseA.then(function() {
-                    return promiseB;
+                // Save them to the database
+                return messageA.save().then(function() {
+                    return messageB.save();
                 }).then(function() {
-                    return promiseC
+                    return messageC.save();
                 })
                 .then(function(res) {
+                    // Get the list of messages
                     return chai.request(app)
-                        .get(this.pattern.stringify());
+                        .get(this.listPattern.stringify());
                 }.bind(this))
                 .then(function(res) {
+                    // Check that the messages are in the array
                     res.should.have.status(200);
                     res.type.should.equal('application/json');
                     res.charset.should.equal('utf-8');
@@ -165,27 +162,25 @@ describe('Message endpoints', function() {
                     text: 'Hi Chuck'
                 };
 
-                var promiseA = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageA);
-                var promiseB = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageB);
-                var promiseC = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageC);
+                // Create three messages
+                var messageA = new Message(messageA);
+                var messageB = new Message(messageB);
+                var messageC = new Message(messageC);
 
-                return promiseA.then(function() {
-                    return promiseB;
+                // Save them to the database
+                return messageA.save().then(function() {
+                    return messageB.save();
                 }).then(function() {
-                    return promiseC
+                    return messageC.save();
                 })
                 .then(function(res) {
-                    var url = this.pattern.stringify() + '?from=' + this.alice._id;
+                    // Get the list of messages from Alice
+                    var url = this.listPattern.stringify() + '?from=' + this.alice._id;
                     return chai.request(app)
                         .get(url);
                 }.bind(this))
                 .then(function(res) {
+                    // Check that the correct messages are in the array
                     res.should.have.status(200);
                     res.type.should.equal('application/json');
                     res.charset.should.equal('utf-8');
@@ -236,27 +231,25 @@ describe('Message endpoints', function() {
                     text: 'Hi Chuck'
                 };
 
-                var promiseA = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageA);
-                var promiseB = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageB);
-                var promiseC = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageC);
+                // Create three messages
+                var messageA = new Message(messageA);
+                var messageB = new Message(messageB);
+                var messageC = new Message(messageC);
 
-                return promiseA.then(function() {
-                    return promiseB;
+                // Save them to the database
+                return messageA.save().then(function() {
+                    return messageB.save();
                 }).then(function() {
-                    return promiseC
+                    return messageC.save();
                 })
                 .then(function(res) {
-                    var url = this.pattern.stringify() + '?to=' + this.chuck._id;
+                    // Get the list of messages to Chuck
+                    var url = this.listPattern.stringify() + '?to=' + this.chuck._id;
                     return chai.request(app)
                         .get(url);
                 }.bind(this))
                 .then(function(res) {
+                    // Check that the correct messages are in the array
                     res.should.have.status(200);
                     res.type.should.equal('application/json');
                     res.charset.should.equal('utf-8');
@@ -307,29 +300,27 @@ describe('Message endpoints', function() {
                     text: 'Hi Chuck'
                 };
 
-                var promiseA = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageA);
-                var promiseB = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageB);
-                var promiseC = chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(messageC);
+                // Create three messages
+                var messageA = new Message(messageA);
+                var messageB = new Message(messageB);
+                var messageC = new Message(messageC);
 
-                return promiseA.then(function() {
-                    return promiseB;
+                // Save them to the database
+                return messageA.save().then(function() {
+                    return messageB.save();
                 }).then(function() {
-                    return promiseC
+                    return messageC.save();
                 })
                 .then(function(res) {
-                    var url = this.pattern.stringify() +
+                    // Get the list of messages from Alice to Bob
+                    var url = this.listPattern.stringify() +
                               '?from=' + this.alice._id +
                               '&to=' + this.bob._id;
                     return chai.request(app)
                         .get(url);
                 }.bind(this))
                 .then(function(res) {
+                    // Check that the correct messages are in the array
                     res.should.have.status(200);
                     res.type.should.equal('application/json');
                     res.charset.should.equal('utf-8');
@@ -358,10 +349,12 @@ describe('Message endpoints', function() {
                     to: this.bob._id,
                     text: 'Hi Bob'
                 };
+                // Add a message
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(function(res) {
+                        // Check that an empty object was returned
                         res.should.have.status(201);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -369,21 +362,22 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
 
-                        return chai.request(app)
-                            .get(res.headers.location);
-                    })
+                        var params = this.singlePattern.match(res.headers.location);
+                        // Fetch the message from the database, using the ID
+                        // from the location header
+                        return Message.findById(params.messageId).exec();
+                    }.bind(this))
                     .then(function(res) {
-                        res.body.should.be.an('object');
-                        res.body.should.have.property('text');
-                        res.body.text.should.be.a('string');
-                        res.body.text.should.equal(message.text);
-                        res.body.should.have.property('to');
-                        res.body.from.should.be.an('object');
-                        res.body.from.should.have.property('username');
-                        res.body.from.username.should.equal(this.alice.username);
-                        res.body.to.should.be.an('object');
-                        res.body.to.should.have.property('username');
-                        res.body.to.username.should.equal(this.bob.username);
+                        // Check that the message has been added to the
+                        // database
+                        should.exist(res);
+                        res.should.have.property('text');
+                        res.text.should.be.a('string');
+                        res.text.should.equal(message.text);
+                        res.should.have.property('from');
+                        res.from.toString().should.equal(this.alice._id);
+                        res.should.have.property('to');
+                        res.to.toString().should.equal(this.bob._id);
                     }.bind(this));
             });
             it('should reject messages without text', function() {;
@@ -391,15 +385,15 @@ describe('Message endpoints', function() {
                     from: this.alice._id,
                     to: this.bob._id
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a message without text
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -407,6 +401,10 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Missing field: text');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject non-string text', function() {;
@@ -415,15 +413,15 @@ describe('Message endpoints', function() {
                     to: this.bob._id,
                     text: 42
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a message with non-string text
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -431,6 +429,10 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field type: text');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject non-string to', function() {
@@ -439,15 +441,15 @@ describe('Message endpoints', function() {
                     to: 42,
                     text: 'Hi Bob'
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a message with non-string to
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -455,6 +457,10 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field type: to');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject non-string from', function() {
@@ -463,15 +469,15 @@ describe('Message endpoints', function() {
                     to: this.bob._id,
                     text: 'Hi Bob'
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a message with non-string from
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -479,6 +485,10 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field type: from');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject messages from non-existent users', function() {
@@ -487,15 +497,14 @@ describe('Message endpoints', function() {
                     to: this.bob._id,
                     text: 'Hi Bob'
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -503,24 +512,27 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field value: from');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject messages to non-existent users', function() {
                 var message = {
                     from: this.alice._id,
-                    to: 'DDDDDDDDDDDDDDDDDDDDDDDD',
+                    to: 'dddddddddddddddddddddddd',
                     text: 'Hi Dan'
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a message to a non-existent user
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(message)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
-                        spy.should.not.have.been.called();
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -528,26 +540,26 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field value: to');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
         });
     });
 
     describe('/messages/:messageId', function() {
-        beforeEach(function() {
-            this.pattern = new UrlPattern('/messages/:messageId');
-        });
-
         describe('GET', function() {
             it('should 404 on non-existent messages', function() {
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Get a message which doesn't exist
                 return chai.request(app)
-                    .get(this.pattern.stringify({messageId: '000000000000000000000000'}))
+                    .get(this.singlePattern.stringify({messageId: '000000000000000000000000'}))
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(404);
                         res.type.should.equal('application/json');
@@ -555,6 +567,10 @@ describe('Message endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Message not found');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should return a single message', function() {
@@ -563,18 +579,19 @@ describe('Message endpoints', function() {
                     to: this.bob._id,
                     text: 'Hi Bob'
                 };
-                var params;
-                return chai.request(app)
-                    .post('/messages')
-                    .send(message)
+                var messageId;
+                // Add a message to the database
+                return new Message(message).save()
                     .then(function(res) {
-                        params = this.pattern.match(res.headers.location);
+                        messageId = res._id.toString();
+                        // Request the message
                         return chai.request(app)
-                            .get(this.pattern.stringify({
-                                messageId: params.messageId
+                            .get(this.singlePattern.stringify({
+                                messageId: messageId
                             }));
                     }.bind(this))
                     .then(function(res) {
+                        // Check that the message is returned
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');

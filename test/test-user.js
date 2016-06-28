@@ -2,31 +2,34 @@ global.databaseUri = 'mongodb://localhost/sup-dev';
 
 var chai = require('chai');
 var chaiHttp = require('chai-http');
-var spies = require('chai-spies');
 var mongoose = require('mongoose');
 var UrlPattern = require('url-pattern');
 var app = require('../index').app;
 
+var User = require('../models/user');
+
+var makeSpy = require('./spy');
+
 var should = chai.should();
 
 chai.use(chaiHttp);
-chai.use(spies);
 
 describe('User endpoints', function() {
     beforeEach(function(done) {
+        // Clear the database
         mongoose.connection.db.dropDatabase(done);
+        this.singlePattern = new UrlPattern('/users/:userId');
+        this.listPattern = new UrlPattern('/users');
     });
 
     describe('/users', function() {
-        beforeEach(function() {
-            this.pattern = new UrlPattern('/users');
-        });
-
         describe('GET', function() {
             it('should return an empty list of users initially', function() {
+                // Get the list of users
                 return chai.request(app)
-                    .get(this.pattern.stringify())
+                    .get(this.listPattern.stringify())
                     .then(function(res) {
+                        // Check that it's an empty array
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -39,14 +42,16 @@ describe('User endpoints', function() {
                 var user = {
                     username: 'joe'
                 };
-                return chai.request(app)
-                    .post(this.pattern.stringify())
-                    .send(user)
-                    .then(function(res) {
+
+                // Create a user
+                return new User(user).save()
+                    .then(function() {
+                        // Get the list of users
                         return chai.request(app)
-                            .get(this.pattern.stringify());
+                                   .get(this.listPattern.stringify());
                     }.bind(this))
                     .then(function(res) {
+                        // Check that the array contains a user
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -59,7 +64,6 @@ describe('User endpoints', function() {
                         res.body[0].should.have.property('_id');
                         res.body[0]._id.should.be.a('string');
                     });
-
             });
         });
         describe('POST', function() {
@@ -67,10 +71,13 @@ describe('User endpoints', function() {
                 var user = {
                     username: 'joe'
                 };
+
+                // Add a user
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(user)
                     .then(function(res) {
+                        // Check that an empty object is returned
                         res.should.have.status(201);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -78,29 +85,30 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
 
-                        return chai.request(app)
-                            .get(res.headers.location);
-                    })
+                        var params = this.singlePattern.match(res.headers.location);
+                        // Fetch the user from the database, using the
+                        // location header to get the ID
+                        return User.findById(params.userId).exec();
+                    }.bind(this))
                     .then(function(res) {
-                        res.body.should.be.an('object');
-                        res.body.should.have.property('username');
-                        res.body.username.should.be.a('string');
-                        res.body.username.should.equal(user.username);
-                        res.body.should.have.property('_id');
-                        res.body._id.should.be.a('string');
+                        // Check that the user exists in the database
+                        should.exist(res);
+                        res.should.have.property('username');
+                        res.username.should.be.a('string');
+                        res.username.should.equal(user.username);
                     });
             });
             it('should reject users without a username', function() {
                 var user = {};
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a user without a username
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(user)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -108,21 +116,25 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Missing field: username');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject non-string usernames', function() {
                 var user = {
                     username: 42
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a user without a non-string username
                 return chai.request(app)
-                    .post(this.pattern.stringify())
+                    .post(this.listPattern.stringify())
                     .send(user)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -130,26 +142,26 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field type: username');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
         });
     });
 
     describe('/users/:userId', function() {
-        beforeEach(function() {
-            this.pattern = new UrlPattern('/users/:userId');
-        });
-
         describe('GET', function() {
             it('should 404 on non-existent users', function() {
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Request a non-existent user
                 return chai.request(app)
-                    .get(this.pattern.stringify({userId: '000000000000000000000000'}))
+                    .get(this.singlePattern.stringify({userId: '000000000000000000000000'}))
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(404);
                         res.type.should.equal('application/json');
@@ -157,6 +169,10 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('User not found');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
 
@@ -164,18 +180,19 @@ describe('User endpoints', function() {
                 var user = {
                     username: 'joe'
                 };
-                var params;
-                return chai.request(app)
-                    .post('/users')
-                    .send(user)
+                var userId;
+                // Add a user to the database
+                return new User(user).save()
                     .then(function(res) {
-                        params = this.pattern.match(res.headers.location);
+                        userId = res._id.toString();
+                        // Make a request for the user
                         return chai.request(app)
-                            .get(this.pattern.stringify({
-                                userId: params.userId
+                            .get(this.singlePattern.stringify({
+                                userId: userId
                             }));
                     }.bind(this))
                     .then(function(res) {
+                        // Check that the user's information is returned
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
@@ -185,7 +202,7 @@ describe('User endpoints', function() {
                         res.body.username.should.equal(user.username);
                         res.body.should.have.property('_id');
                         res.body._id.should.be.a('string');
-                        res.body._id.should.equal(params.userId)
+                        res.body._id.should.equal(userId)
                     });
             });
         });
@@ -198,38 +215,35 @@ describe('User endpoints', function() {
                 var newUser = {
                     username: 'joe2'
                 };
-                var params;
-                return chai.request(app)
-                    .post('/users')
-                    .send(oldUser)
+                var userId;
+                // Add a user to the database
+                return new User(oldUser).save()
                     .then(function(res) {
-                        params = this.pattern.match(res.headers.location);
+                        userId = res._id.toString();
+                        // Make a request to modify the user
                         return chai.request(app)
-                            .put(this.pattern.stringify({
-                                userId: params.userId
+                            .put(this.singlePattern.stringify({
+                                userId: userId
                             }))
                             .send(newUser);
                     }.bind(this))
                     .then(function(res) {
+                        // Check that an empty object was returned
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
 
-                        return chai.request(app)
-                            .get(this.pattern.stringify({
-                                userId: params.userId
-                            }));
-                    }.bind(this))
+                        // Fetch the user from the database
+                        return User.findById(userId).exec();
+                    })
                     .then(function(res) {
-                        res.body.should.be.an('object');
-                        res.body.should.have.property('username');
-                        res.body.username.should.be.a('string');
-                        res.body.username.should.equal(newUser.username);
-                        res.body.should.have.property('_id');
-                        res.body._id.should.be.a('string');
-                        res.body._id.should.equal(params.userId);
+                        // Check that the user has been updated
+                        should.exist(res);
+                        res.should.have.property('username');
+                        res.username.should.be.a('string');
+                        res.username.should.equal(newUser.username);
                     });
             });
             it('should create a user if they don\'t exist', function() {
@@ -237,48 +251,46 @@ describe('User endpoints', function() {
                     _id: '000000000000000000000000',
                     username: 'joe'
                 };
+                // Request to add a new user
                 return chai.request(app)
-                    .put(this.pattern.stringify({
+                    .put(this.singlePattern.stringify({
                         userId: user._id
                     }))
                     .send(user)
                     .then(function(res) {
+                        // Check that an empty object was returned
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
 
-                        return chai.request(app)
-                            .get(this.pattern.stringify({
-                                userId: user._id
-                            }));
-                    }.bind(this))
+                        // Fetch the user from the database
+                        return User.findById(user._id).exec();
+                    })
                     .then(function(res) {
-                        res.body.should.be.an('object');
-                        res.body.should.have.property('username');
-                        res.body.username.should.be.a('string');
-                        res.body.username.should.equal(user.username);
-                        res.body.should.have.property('_id');
-                        res.body._id.should.be.a('string');
-                        res.body._id.should.equal(user._id);
+                        // Check that the user has been added
+                        should.exist(res);
+                        res.should.have.property('username');
+                        res.username.should.be.a('string');
+                        res.username.should.equal(user.username);
                     });
             });
             it('should reject users without a username', function() {
                 var user = {
                     _id: '000000000000000000000000'
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a user without a username
                 return chai.request(app)
-                    .put(this.pattern.stringify({
+                    .put(this.singlePattern.stringify({
                         userId: user._id
                     }))
                     .send(user)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -286,6 +298,10 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Missing field: username');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should reject non-string usernames', function() {
@@ -293,17 +309,17 @@ describe('User endpoints', function() {
                     _id: '000000000000000000000000',
                     username: 42
                 };
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Add a user with a non-string username
                 return chai.request(app)
-                    .put(this.pattern.stringify({
+                    .put(this.singlePattern.stringify({
                         userId: user._id
                     }))
                     .send(user)
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(422);
                         res.type.should.equal('application/json');
@@ -311,20 +327,24 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('Incorrect field type: username');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
         });
 
         describe('DELETE', function() {
             it('should 404 on non-existent users', function() {
-                var spy = chai.spy();
+                var spy = makeSpy();
+                // Try to delete a non-existent user
                 return chai.request(app)
-                    .delete(this.pattern.stringify({userId: '000000000000000000000000'}))
+                    .delete(this.singlePattern.stringify({userId: '000000000000000000000000'}))
                     .then(spy)
-                    .then(function() {
-                        spy.should.not.have.been.called();
-                    })
                     .catch(function(err) {
+                        // If the request fails, make sure it contains the
+                        // error
                         var res = err.response;
                         res.should.have.status(404);
                         res.type.should.equal('application/json');
@@ -332,43 +352,42 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('User not found');
+                    })
+                    .then(function() {
+                        // Check that the request didn't succeed
+                        spy.called.should.be.false;
                     });
             });
             it('should delete a user', function() {
                 var user = {
                     username: 'joe'
                 };
-                var params;
-                return chai.request(app)
-                    .post('/users')
-                    .send(user)
+                var userId;
+                // Create a user in the database
+                return new User(user).save()
                     .then(function(res) {
-                        params = this.pattern.match(res.headers.location);
+                        userId = res._id.toString();
+                        // Request to delete the user
                         return chai.request(app)
-                            .delete(this.pattern.stringify({
-                                userId: params.userId
+                            .delete(this.singlePattern.stringify({
+                                userId: userId
                             }));
                     }.bind(this))
                     .then(function(res) {
+                        // Make sure that an empty object was returned
                         res.should.have.status(200);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
-                        var spy = chai.spy();
-                        return chai.request(app)
-                            .get(this.pattern.stringify({
-                                userId: params.userId
-                            }))
-                            .then(spy)
-                            .then(function() {
-                                spy.should.not.have.been.called();
-                            })
-                            .catch(function(err) {
-                                var res = err.response;
-                                res.should.have.status(404);
-                            });
-                    }.bind(this))
+
+                        // Try to fetch the user from the database
+                        return User.findById(userId);
+                    })
+                    .then(function(res) {
+                        // Make sure that no user could be fetched
+                        should.not.exist(res);
+                    });
             });
         });
     });
