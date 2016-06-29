@@ -195,7 +195,7 @@ An empty object.
 
 ### Messages endpoints
 
-#### /messages
+#### `/messages`
 
 Endpoint representing all messages in Sup.
 
