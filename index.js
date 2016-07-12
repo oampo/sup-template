@@ -13,7 +13,7 @@ var runServer = function(callback) {
     mongoose.connect(databaseUri).then(function() {
         var port = process.env.PORT || 8080;
         var server = app.listen(port, function() {
-            console.log('Listening on localhost:' + port);
+            console.log('Listening on port ' + port);
             if (callback) {
                 callback(server);
             }
